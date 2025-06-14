@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cola de Trabajo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/logo-isotipo-sos.webp') }}">
+</head> 
+<body data-user-id="{{ current_user.id }}" data-is-admin="{{ current_user.is_admin }}">
+  <header>
+    <h1>Cola de Trabajo</h1>
+  </header>
+
+  <section class="queue-container job-container">
+    <h2 class="queue-title">📋 Trabajos Pendientes</h2>
+    <div id="job-status-wrapper">
+      {% if job_count == 0 %}
+        <p>No hay trabajos disponibles.</p>
+      {% elif job_count == 1 %}
+        <p class="job-count-display">Hay 1 trabajo disponible</p>
+      {% else %}
+        <p class="job-count-display">Hay {{ job_count }} trabajos disponibles</p>
+      {% endif %}
+    </div>
+    {% if current_user.is_authenticated and current_user.is_admin %}
+      <button id="btn-add-job">Añadir Nuevo Trabajo</button>
+    {% endif %}
+  </section>
+
+  <section id="user-container" class="queue-container">
+    <div id="main-action-button-wrapper">
+      {% if current_user.is_authenticated and not current_user.is_admin and current_user.id not in active_ids %}
+        <button id="btn-available">Ponerme Disponible</button>
+      {% endif %}
+    </div>
+
+    <div class="queue-section">
+      <h2 class="queue-title">🟢 Disponibles</h2>
+      <ul id="available-users-list" class="user-queue">
+        {% for user in available_users %}
+          <li id="user-{{ user.id }}" class="available">
+            <span class="user-name {% if user.id == current_user.id %}current-user{% endif %}">{{ user.name }}</span>
+            <div class="user-controls">
+              {% if not current_user.is_admin and user.id == current_user.id %}
+                {% if loop.first and job_count > 0 %}
+                  <button data-action="work">Empezar Trabajo</button>
+                {% endif %}
+                <button data-action="idle">Descansar</button>
+              {% endif %}
+              {% if current_user.is_admin %}
+                <button class="btn-admin" data-action="move-up" data-id="{{ user.id }}" title="Subir">⬆️</button>
+                <button class="btn-admin" data-action="move-down" data-id="{{ user.id }}" title="Bajar">⬇️</button>
+                <button class="btn-admin" data-action="set-idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
+              {% endif %}
+            </div>
+          </li>
+        {% else %}
+          <li class="empty-list-item">No hay nadie disponible en este momento.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="queue-section">
+      <h2 class="queue-title">🔴 En Trabajo</h2>
+      <ul id="working-users-list" class="user-queue">
+        {% for user in working_users %}
+          <li id="user-{{ user.id }}" class="working">
+            <span class="user-name {% if user.id == current_user.id %}current-user{% endif %}">{{ user.name }}</span>
+            <div class="user-controls">
+              {% if not current_user.is_admin and user.id == current_user.id %}
+                <button data-action="finish">Terminar Trabajo</button>
+              {% endif %}
+              {% if current_user.is_admin %}
+                <button class="btn-admin" data-action="set-idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
+              {% endif %}
+            </div>
+          </li>
+        {% else %}
+          <li class="empty-list-item">Nadie está trabajando actualmente.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="queue-section">
+      <h2 class="queue-title">⚪️ En Descanso</h2>
+      <ul id="idle-users-list" class="user-queue">
+        {% for user in idle_users %}
+          <li id="user-{{ user.id }}" class="idle">
+            <span class="user-name {% if user.id == current_user.id %}current-user{% endif %}">{{ user.name }}</span>
+          </li>
+        {% else %}
+          <li class="empty-list-item">No hay nadie en descanso.</li>
+        {% endfor %}
+      </ul>
+    </div>
+    
+    <section class="logout-section">
+      {% if current_user.is_authenticated %}
+        <a href="{{ url_for('auth.logout') }}">Cerrar sesión ({{ current_user.username }})</a>
+      {% endif %}
+    </section>
+  </section>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // --- DATOS DEL USUARIO ACTUAL ---
+      const currentUserID = parseInt(document.body.dataset.userId, 10);
+      const isAdmin = document.body.dataset.isAdmin === 'True';
+      
+      // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+      const jobStatusWrapper = document.getElementById('job-status-wrapper');
+      const mainActionButtonWrapper = document.getElementById('main-action-button-wrapper');
+      const availableUsersList = document.getElementById('available-users-list');
+      const workingUsersList = document.getElementById('working-users-list');
+      const idleUsersList = document.getElementById('idle-users-list');
+
+      // --- FUNCIONES DE RENDERIZADO (ACTUALIZACIÓN DE LA PANTALLA) ---
+
+      function renderJobStatus(state) {
+        if (!jobStatusWrapper) return;
+        let html = '';
+        if (state.job_count === 0) {
+          html = `<p>No hay trabajos disponibles.</p>`;
+        } else if (state.job_count === 1) {
+          html = `<p class="job-count-display">Hay 1 trabajo disponible</p>`;
+        } else {
+          html = `<p class="job-count-display">Hay ${state.job_count} trabajos disponibles</p>`;
+        }
+        jobStatusWrapper.innerHTML = html;
+      }
+
+      function renderMainActionButton(state) {
+        if (!mainActionButtonWrapper || isAdmin) return;
+        let html = '';
+        // El ID del usuario actual no debe estar en la lista de activos para mostrar el botón
+        if (!state.active_ids.includes(currentUserID)) {
+          html = `<button id="btn-available">Ponerme Disponible</button>`;
+        }
+        mainActionButtonWrapper.innerHTML = html;
+      }
+
+      function renderUserList(ulElement, users, status, state) {
+        if (!ulElement) return;
+        
+        // CORRECCIÓN: Se crea un "fragmento" en memoria para construir la nueva lista.
+        // Esto evita el parpadeo en la página.
+        const fragment = document.createDocumentFragment();
+
+        if (!users || users.length === 0) {
+          const li = document.createElement('li');
+          li.className = 'empty-list-item';
+          li.textContent = 'No hay nadie en esta cola.';
+          fragment.appendChild(li);
+        } else {
+          users.forEach((user, index) => {
+            const isCurrentUser = user.id === currentUserID;
+            const li = document.createElement('li');
+            li.id = `user-${user.id}`;
+            li.className = status;
+
+            let controlsHTML = '';
+            if (isCurrentUser && !isAdmin) {
+              if (status === 'available') {
+                if (index === 0 && state.job_count > 0) controlsHTML += `<button data-action="work">Empezar Trabajo</button>`;
+                controlsHTML += `<button data-action="idle">Descansar</button>`;
+              } else if (status === 'working') {
+                controlsHTML += `<button data-action="finish">Terminar Trabajo</button>`;
+              }
+            }
+            if (isAdmin) {
+              if (status === 'available') {
+                controlsHTML += `<button class="btn-admin" data-action="move-up" data-id="${user.id}" title="Subir">⬆️</button>`;
+                controlsHTML += `<button class="btn-admin" data-action="move-down" data-id="${user.id}" title="Bajar">⬇️</button>`;
+              }
+              if (status !== 'idle') {
+                controlsHTML += `<button class="btn-admin" data-action="set-idle" data-id="${user.id}" title="Mandar a Descanso">🛌</button>`;
+              }
+            }
+
+            const currentClass = isCurrentUser ? 'current-user' : '';
+            li.innerHTML = `
+              <span class="user-name ${currentClass}">${user.name}</span>
+              <div class="user-controls">${controlsHTML}</div>`;
+            fragment.appendChild(li);
+          });
+        }
+        
+        // Se borra el contenido antiguo y se inserta el nuevo de un solo golpe.
+        ulElement.innerHTML = '';
+        ulElement.appendChild(fragment);
+      }
+
+      function updateUI(state) {
+        renderJobStatus(state);
+        renderMainActionButton(state);
+        renderUserList(availableUsersList, state.available_users, 'available', state);
+        renderUserList(workingUsersList, state.working_users, 'working', state);
+        renderUserList(idleUsersList, state.idle_users, 'idle', state);
+      }
+      
+      // --- LÓGICA DE POLLING Y ACCIONES ---
+
+      const fetchAndUpdateState = async () => {
+        try {
+          const response = await fetch("{{ url_for('sosqueue.get_state') }}");
+          if (response.ok) {
+            const state = await response.json();
+            updateUI(state);
+          }
+        } catch (error) {
+          console.error("Fallo al obtener estado:", error);
+        }
+      };
+      
+      const callAction = (endpoint) => {
+        fetch(`{{ url_for('sosqueue.index') }}${endpoint}`, { method: 'POST' })
+          .then(res => {
+            if (!res.ok) return res.json().then(err => { throw new Error(err.error || 'Error desconocido') });
+            fetchAndUpdateState(); // Actualiza inmediatamente después de una acción exitosa.
+          })
+          .catch(err => alert(`Error: ${err.message}`));
+      };
+
+      // --- MANEJO CENTRALIZADO DE EVENTOS ---
+      
+      document.body.addEventListener('click', (event) => {
+        const target = event.target;
+        const action = target.dataset.action;
+        
+        if (action) {
+          event.preventDefault(); // Previene comportamientos por defecto
+          switch(action) {
+            case 'work':
+            case 'finish':
+            case 'idle':
+              callAction(action);
+              break;
+            case 'move-up':
+            case 'move-down':
+              callAction(`admin/move/${target.dataset.id}/${action === 'move-up' ? 'up' : 'down'}`);
+              break;
+            case 'set-idle':
+              callAction(`admin/set_idle/${target.dataset.id}`);
+              break;
+          }
+        } else if (target.id === 'btn-add-job' || target.id === 'btn-available') {
+          event.preventDefault();
+          callAction(target.id === 'btn-add-job' ? 'admin/add_job' : 'available');
+        }
+      });
+
+      // --- INICIO DEL POLLING ---
+      // No se llama a fetchAndUpdateState() al inicio porque el servidor ya renderizó la página.
+      // El polling comienza después de 3 segundos.
+      setInterval(fetchAndUpdateState, 3000);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+/*app/static/css/projects/sosqueue/main.css*/
+
+:root {
+  --bg-page: #f5f5f5;
+  --bg-container: #ffffff;
+  --text-main: #333333;
+  --text-muted: #777777;
+  --accent-yellow: #FFD54F;
+  --accent-gray: #DDDDDD;
+  --btn-green: #4CAF50;
+  --btn-red:   #E74C3C;
+}
+
+/* ==================================================================
+   1. Estilos Base y Layout
+================================================================== */
+body {
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  margin: 0;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+header {
+  margin-bottom: 1.5rem;
+}
+
+header h1 {
+  font-size: 2.2rem;
+  color: var(--accent-yellow);
+  letter-spacing: 2px;
+  margin: 0;
+}
+
+.queue-container {
+  background-color: var(--bg-container);
+  max-width: 700px;
+  margin: 0 auto 2rem auto;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+
+.logout-section {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--accent-gray);
+}
+
+/* ==================================================================
+   2. Contenedor de Trabajos
+================================================================== */
+.job-container {
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+}
+
+.job-status p {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin: 0.5rem 0 1rem;
+}
+
+.job-count-display {
+  background-color: #FFF9C4; /* Amarillo pastel */
+  color: #795548; /* Texto oscuro para contraste */
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  display: inline-block;
+  border: 1px solid #FFF176;
+  font-weight: 600 !important;
+}
+
+#btn-add-job {
+  background-color: var(--btn-green);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#btn-add-job:hover {
+  background-color: #43a047;
+}
+
+/* ==================================================================
+   3. Secciones y Lista de Usuarios
+================================================================== */
+.queue-section {
+  margin-top: 1rem;
+}
+
+.queue-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: left;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.4rem;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid #e9e9e9;
+  margin: 2rem 0;
+}
+
+.user-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.user-queue li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #fafafa;
+  border: 1px solid var(--accent-gray);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.user-name {
+  flex-grow: 1;
+  font-size: 1rem;
+  text-align: left;
+}
+.user-name.current-user {
+  font-weight: bold;
+}
+
+.empty-list-item {
+  background-color: transparent !important;
+  border: 1px dashed var(--accent-gray) !important;
+  color: var(--text-muted);
+  font-style: italic;
+  justify-content: center;
+  padding: 0.8rem;
+  text-align: center;
+}
+
+/* ==================================================================
+   4. Estilos de Estado (Colores)
+================================================================== */
+.user-queue li.idle {
+  background-color: #f0f0f0;
+  color: var(--text-muted);
+}
+
+.user-queue li.available .user-name,
+.user-queue li.working .user-name {
+  padding: 0.3rem 0.6rem;
+  border-radius: 5px;
+  display: inline-block;
+}
+
+.user-queue li.available .user-name {
+  background-color: #C8E6C9; /* Verde pastel */
+  color: #255d28;
+}
+
+.user-queue li.working .user-name {
+  background-color: #FFCDD2; /* Rojo pastel */
+  color: #b72c38;
+}
+
+/* ==================================================================
+   5. Botones
+================================================================== */
+#btn-available {
+  background-color: var(--btn-green);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.7rem 1.4rem;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-bottom: 1.5rem;
+}
+#btn-available:hover {
+  background-color: #43a047;
+}
+
+.user-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 100%;
+}
+
+/* Botones de acción del empleado */
+#btn-work, #btn-finish, #btn-idle {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+#btn-work   { background-color: var(--accent-yellow); color: var(--text-main); border-color: #e6c843; }
+#btn-finish { background-color: var(--accent-yellow); color: var(--text-main); border-color: #e6c843; }
+#btn-idle   { background-color: #f8f9fa; color: var(--text-muted); }
+
+/* Botones de admin */
+.btn-admin {
+  border: none;
+  background: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.2rem;
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.btn-admin:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
