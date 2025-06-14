@@ -2,7 +2,7 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import (
-    login_user, logout_user, login_required,
+    login_user, logout_user, login_required, current_user,
     UserMixin, LoginManager
 )
 
@@ -62,26 +62,33 @@ def load_user(user_id: str):
 # ------------------------------------------------------------------
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    # Esta línea ahora funcionará correctamente.
     if current_user.is_authenticated:
         return redirect(url_for('sosqueue.index'))
+
     if request.method == 'POST':
-        # ... (lógica de login sin cambios)
         username = request.form['username']
-        if not username:
+        password = request.form['password'] # Necesitamos el password del formulario
+
+        # 2. LÓGICA DE LOGIN CORREGIDA
+        user_credentials = _CREDENTIALS.get(username)
+        if user_credentials and user_credentials['password'] == password:
+            # Si el usuario existe y la contraseña es correcta, creamos el objeto User
+            user = User(
+                user_id=user_credentials['id'],
+                username=username,
+                is_admin=user_credentials.get('admin', False)
+            )
+            # Logueamos al usuario
+            login_user(user)
+            # Redirigimos a la página siguiente o al index
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('sosqueue.index'))
+        else:
+            # Si las credenciales son incorrectas, mostramos un error
+            flash('Usuario o contraseña incorrectos.')
             return redirect(url_for('auth.login'))
-        
-        user_id = 1 if username.lower() == 'admin' else 2
-        
-        user = User(user_id=user_id, username=username)
-        
-        if user_id == 1:
-            user.is_admin = True
-        
-        login_user(user)
-        
-        next_page = request.args.get('next')
-        return redirect(next_page or url_for('sosqueue.index'))
-        
+
     return render_template('login.html')
 
 @auth_bp.route('/logout')

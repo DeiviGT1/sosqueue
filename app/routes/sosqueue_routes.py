@@ -60,6 +60,7 @@ def index():
     }
     return render_template('main.html', **initial_state)
 
+
 @sos_bp.route('/available', methods=['POST'])
 @login_required
 def become_available():
