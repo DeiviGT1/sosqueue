@@ -3,6 +3,10 @@
 from flask_login import LoginManager
 from flask_bootstrap import Bootstrap
 
+login_manager = LoginManager()
+# El nombre de la ruta ahora es 'auth.login' (blueprint.funcion)
+login_manager.login_view = 'auth.login'
+
 def register_routes(app):
     # --- Inicializar extensiones ---
     Bootstrap(app)
