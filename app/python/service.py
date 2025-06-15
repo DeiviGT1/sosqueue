@@ -1,7 +1,7 @@
 import os
 import json
 import redis
-from ..models import User
+from app.models.User import User
 
 class JobService:
     """Gestiona el contador de trabajos pendientes usando Redis."""
@@ -99,11 +99,11 @@ class QueueService:
 class UserService:
     # Base de datos de usuarios en memoria
     _CREDENTIALS = {
-        'admin':   {'id': 0, 'password': 'admin', 'admin': True, 'pin': '0000'},
-        'Juanfer': {'id': 1, 'password': '1', 'pin': '1234'},
-        'Edison':  {'id': 2, 'password': '2', 'pin': '5678'},
-        'Johan':   {'id': 3, 'password': '3', 'pin': '9101'},
-        'emp':     {'id': 4, 'password': '4', 'pin': '1121'},
+        'admin':   {'id': 0, 'password': 'admin', 'admin': True, 'pin': '0000', 'name': 'admin'},
+        'Juanfer': {'id': 1, 'password': '1', 'pin': '1234', 'name': 'Juanfer'},
+        'Edison':  {'id': 2, 'password': '2', 'pin': '5678', 'name': 'Edison'},
+        'Johan':   {'id': 3, 'password': '3', 'pin': '9101', 'name': 'Johan'},
+        'emp':     {'id': 4, 'password': '4', 'pin': '1121', 'name': 'emp'},
     }
 
     @classmethod

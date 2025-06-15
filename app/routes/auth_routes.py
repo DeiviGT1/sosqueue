@@ -16,7 +16,7 @@ def login():
         password = request.form['password']
 
         if UserService.validate_credentials(username, password):
-            user = UserService.get_by_name(username)
+            user = UserService.get_user_by_name(username)
             if user:
                 login_user(user) # Llama a la función importada
                 return redirect(url_for('sosqueue.index'))
