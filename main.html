@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% comment %} <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -6,7 +6,6 @@
   <title>Cola de Trabajo</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/logo-isotipo-sos.webp') }}">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.2/socket.io.js"></script>
 </head> 
 <body data-user-id="{{ current_user.id }}" data-is-admin="{{ current_user.is_admin }}">
   <header>
@@ -166,4 +165,4 @@
     });
   </script>
 </body>
-</html>
+</html> {% endcomment %}

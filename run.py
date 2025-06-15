@@ -1,10 +1,8 @@
-import eventlet
-eventlet.monkey_patch() # <-- AÑADIR ESTA LÍNEA
-
-from app import create_app, socketio
+# run.py
+from app import create_app
 
 app = create_app()
 
 if __name__ == '__main__':
-    # Esta línea ahora usará el servidor de eventlet gracias al monkey patch
-    socketio.run(app, debug=True)
+    # Ejecuta la aplicación en modo debug para desarrollo
+    app.run(debug=True)
