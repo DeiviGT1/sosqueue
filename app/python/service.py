@@ -1,91 +1,141 @@
 import os
+import json
 import redis
-from ..models import User # Nos aseguramos de importar la CLASE User directamente
+from ..models import User
 
-# --- JobService ---
 class JobService:
+    """Gestiona el contador de trabajos pendientes usando Redis."""
     def __init__(self):
-        self.redis_client = None
+        self.job_key = 'sosqueue_job_count'
+        self.db = None
         try:
             redis_url = os.environ.get("REDIS_URL")
             if not redis_url:
-                print("ERROR CRÍTICO: No se pudo conectar con Redis para JobService. La variable de entorno REDIS_URL no está configurada.")
-                return
-            self.redis_client = redis.from_url(redis_url)
+                raise ValueError("La variable de entorno REDIS_URL no está configurada.")
+            self.db = redis.from_url(redis_url, decode_responses=True)
+            self.db.ping()
         except Exception as e:
             print(f"ERROR CRÍTICO: No se pudo conectar con Redis para JobService. {e}")
 
     def get_job_count(self):
-        if not self.redis_client:
-            return 0
-        job_count = self.redis_client.get('sosq:job_count')
-        return job_count.decode('utf-8') if job_count else 0
+        """Devuelve el número de trabajos disponibles."""
+        if not self.db: return 0
+        count = self.db.get(self.job_key)
+        return int(count) if count else 0
 
-# --- QueueService ---
 class QueueService:
+    """Gestiona TODAS las colas de usuarios (available, working, idle)."""
     def __init__(self):
-        self.redis_client = None
+        # __init__ ya no necesita argumentos
+        self.db = None
         try:
             redis_url = os.environ.get("REDIS_URL")
             if not redis_url:
-                print("ERROR CRÍTICO: No se pudo conectar con Redis. La variable de entorno REDIS_URL no está configurada.")
-                return
-            self.redis_client = redis.from_url(redis_url, ssl_cert_reqs=None, decode_responses=True)
+                raise ValueError("La variable de entorno REDIS_URL no está configurada.")
+            self.db = redis.from_url(redis_url, decode_responses=True)
+            self.db.ping()
         except Exception as e:
             print(f"ERROR CRÍTICO: No se pudo conectar con Redis. {e}")
+            
+    def _get_user_from_queues(self, user_id, queues):
+        """Busca un usuario en una lista de colas."""
+        if not self.db: return None, None
+        for queue in queues:
+            for item_json in self.db.lrange(queue, 0, -1):
+                if json.loads(item_json).get('id') == user_id:
+                    return item_json, queue
+        return None, None
 
-    def get_available_users(self):
-        if not self.redis_client: return []
-        return self.redis_client.lrange('sosq:available', 0, -1)
+    def get_queue(self, queue_name):
+        """Devuelve una cola específica como una lista de diccionarios."""
+        if not self.db: return []
+        return [json.loads(item) for item in self.db.lrange(queue_name, 0, -1)]
 
-    def get_working_users(self):
-        if not self.redis_client: return []
-        return self.redis_client.lrange('sosq:working', 0, -1)
+    def join_available(self, user):
+        """Añade un usuario a la cola de disponibles si no existe."""
+        if not self.db or not user: return
+        
+        # Evitar duplicados en todas las colas
+        all_queues = ['sosq:available', 'sosq:working', 'sosq:idle']
+        user_json, _ = self._get_user_from_queues(user.id, all_queues)
+        if user_json:
+            return
 
-    def get_idle_users(self):
-        if not self.redis_client: return []
-        return self.redis_client.lrange('sosq:idle', 0, -1)
+        user_data = {'id': user.id, 'name': user.name, 'pin': user.pin}
+        self.db.rpush('sosq:available', json.dumps(user_data))
 
-    def add_user_to_available(self, user):
-        if not self.redis_client: return
-        self.redis_client.rpush('sosq:available', user.id)
+    def move_to_working(self, user_id):
+        """Mueve un usuario de 'available' a 'working'."""
+        if not self.db: return
+        user_json, queue = self._get_user_from_queues(user_id, ['sosq:available'])
+        if user_json:
+            self.db.lrem(queue, 1, user_json)
+            self.db.rpush('sosq:working', user_json)
 
-    def move_user_to_working(self, user_id):
-        if not self.redis_client: return
-        self.redis_client.lrem('sosq:available', 0, user_id)
-        self.redis_client.rpush('sosq:working', user_id)
+    def move_to_idle(self, user_id):
+        """Mueve un usuario de 'working' a 'idle'."""
+        if not self.db: return
+        user_json, queue = self._get_user_from_queues(user_id, ['sosq:working'])
+        if user_json:
+            self.db.lrem(queue, 1, user_json)
+            self.db.rpush('sosq:idle', user_json)
 
-    def move_user_to_idle(self, user_id):
-        if not self.redis_client: return
-        self.redis_client.lrem('sosq:working', 0, user_id)
-        self.redis_client.rpush('sosq:idle', user_id)
+    def move_to_available(self, user_id):
+        """Devuelve a un usuario a 'available' desde cualquier otra cola."""
+        if not self.db: return
+        user_json, queue = self._get_user_from_queues(user_id, ['sosq:working', 'sosq:idle'])
+        if user_json:
+            self.db.lrem(queue, 1, user_json)
+            self.db.rpush('sosq:available', user_json)
 
-    def move_user_to_available(self, user_id, queue_name):
-        if not self.redis_client: return
-        if queue_name == 'working':
-            self.redis_client.lrem('sosq:working', 0, user_id)
-        elif queue_name == 'idle':
-            self.redis_client.lrem('sosq:idle', 0, user_id)
-        self.redis_client.rpush('sosq:available', user_id)
+    def remove_from_all_queues(self, user_id):
+        """Elimina a un usuario de todas las colas."""
+        if not self.db: return
+        user_json, queue = self._get_user_from_queues(user_id, ['sosq:available', 'sosq:working', 'sosq:idle'])
+        if user_json:
+            self.db.lrem(queue, 1, user_json)
 
-    def remove_user_from_all_queues(self, user_id):
-        if not self.redis_client: return
-        self.redis_client.lrem('sosq:available', 0, user_id)
-        self.redis_client.lrem('sosq:working', 0, user_id)
-        self.redis_client.lrem('sosq:idle', 0, user_id)
-
-# --- UserService ---
+# --- NUEVA CLASE UserService ---
 class UserService:
-    # La definición de la lista de usuarios debe ser un atributo de clase
-    _users = [
-        User(id='1', name='Juanfer', pin='1234'),
-        User(id='2', name='David', pin='5678'),
-    ]
+    # Base de datos de usuarios en memoria
+    _CREDENTIALS = {
+        'admin':   {'id': 0, 'password': 'admin', 'admin': True, 'pin': '0000'},
+        'Juanfer': {'id': 1, 'password': '1', 'pin': '1234'},
+        'Edison':  {'id': 2, 'password': '2', 'pin': '5678'},
+        'Johan':   {'id': 3, 'password': '3', 'pin': '9101'},
+        'emp':     {'id': 4, 'password': '4', 'pin': '1121'},
+    }
 
     @classmethod
-    def get_all(cls):
-        return cls._users
+    def get_user_by_id(cls, user_id):
+        """Busca un usuario por su ID y devuelve un objeto User."""
+        for uname, cred in cls._CREDENTIALS.items():
+            if cred['id'] == int(user_id):
+                return User(
+                    id=cred['id'],
+                    name=uname,
+                    pin=cred['pin'],
+                    is_admin=cred.get('admin', False)
+                )
+        return None
 
     @classmethod
-    def get(cls, id):
-        return next((user for user in cls._users if user.id == id), None)
+    def get_user_by_name(cls, username):
+        """Busca un usuario por su nombre y devuelve un objeto User."""
+        if username in cls._CREDENTIALS:
+            cred = cls._CREDENTIALS[username]
+            return User(
+                id=cred['id'],
+                name=username,
+                pin=cred['pin'],
+                is_admin=cred.get('admin', False)
+            )
+        return None
+
+    @classmethod
+    def validate_credentials(cls, username, password):
+        """Valida las credenciales de un usuario."""
+        user_credentials = cls._CREDENTIALS.get(username)
+        if user_credentials and user_credentials['password'] == password:
+            return True
+        return False

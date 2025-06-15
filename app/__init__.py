@@ -7,7 +7,6 @@ from .routes_main import register_routes
 from .websockets import register_websockets
 
 
-
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')

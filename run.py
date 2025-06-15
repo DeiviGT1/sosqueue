@@ -4,11 +4,11 @@ from dotenv import load_dotenv
 # Carga las variables de entorno ANTES que cualquier otra cosa de la app
 load_dotenv()
 
-# Ahora aplica el parche de gevent
+# Aplica el parche de gevent para que la red funcione correctamente
 from gevent import monkey
 monkey.patch_all()
 
-# Y ahora importa el resto de tu aplicación
+# Ahora importa el resto de tu aplicación
 from app import create_app, socketio
 
 app = create_app()
