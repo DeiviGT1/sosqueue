@@ -15,13 +15,15 @@ from flask_bootstrap import Bootstrap
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'gunicorn'
+    app.config['SECRET_KEY'] = 'tu_clave_secreta_aqui'
 
-    # Initialize extensions
-    Bootstrap(app)
-    login_manager = LoginManager()
-    login_manager.login_view = 'auth.login'
-    login_manager.init_app(app)
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    # Inicializa SocketIO con la configuración de la app
+    socketio.init_app(app)
+
+    # Registra las rutas
+    register_routes(app)
 
     return app
-
