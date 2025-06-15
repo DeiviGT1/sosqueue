@@ -6,6 +6,8 @@
   <title>Cola de Trabajo</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/logo-isotipo-sos.webp') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+
 </head> 
 <body data-user-id="{{ current_user.id }}" data-is-admin="{{ current_user.is_admin }}">
   <header>
@@ -142,7 +144,8 @@
       // --- LÓGICA DE WEBSOCKETS (reemplaza el polling) ---
 
       // 2. Conectarse al servidor de Socket.IO
-      const socket = io();
+      var socket = io.connect('http://' + document.domain + ':' + location.port);
+
 
       // 3. Escuchar el evento 'update_state' del servidor
       socket.on('update_state', (state) => {
