@@ -1,29 +1,24 @@
-# app/__init__.py
-
+import os
 from flask import Flask
-from flask_socketio import SocketIO
+
+# Importa las instancias de las extensiones
+from .extensions import socketio, login_manager
 from .routes_main import register_routes
-import eventlet
+from .websockets import register_websockets
 
-eventlet.monkey_patch()
 
-socketio = SocketIO(cors_allowed_origins="*")
-
-from flask import Flask
-from flask_login import LoginManager
-from flask_bootstrap import Bootstrap
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'tu_clave_secreta_aqui'
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
-    from dotenv import load_dotenv
-    load_dotenv()
-
-    # Inicializa SocketIO con la configuración de la app
+    # Inicializa las extensiones con la app
     socketio.init_app(app)
+    login_manager.init_app(app)
 
-    # Registra las rutas
+    # Registra las rutas y los websockets
     register_routes(app)
-
+    register_websockets(socketio)
+    
+    print("Aplicación creada y configurada.")
     return app

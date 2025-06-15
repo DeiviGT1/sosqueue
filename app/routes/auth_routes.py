@@ -6,6 +6,7 @@ from flask_login import (
     UserMixin, LoginManager
 )
 
+
 # ------------------------------------------------------------------
 # Credenciales (usuario: {id, password, admin?})
 # ------------------------------------------------------------------
