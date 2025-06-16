@@ -64,7 +64,7 @@ def register_websockets(socketio):
             return
 
         logging.info(f"[SERVIDOR] Evento 'set_idle' recibido del usuario: {current_user.name}")
-        # CORRECCIÓN: El método se llama 'move_to_idle' y espera un ID
+        # Llama a 'move_to_idle' y pasa el ID del usuario
         queue_service.move_to_idle(current_user.id)
         get_and_emit_full_state()
 
@@ -77,10 +77,9 @@ def register_websockets(socketio):
             return
             
         logging.info(f"[SERVIDOR] Evento 'set_working' recibido del usuario: {current_user.name}")
-        # CORRECCIÓN: El método se llama 'move_to_working' y espera un ID
+        # Llama a 'move_to_working' y pasa el ID del usuario
         queue_service.move_to_working(current_user.id)
         get_and_emit_full_state()
-
     def get_and_emit_full_state(sid=None):
         """
         Función auxiliar para obtener el estado completo y emitirlo.
