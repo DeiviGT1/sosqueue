@@ -146,6 +146,38 @@
       // 2. Conectarse al servidor de Socket.IO
       var socket = io.connect('http://' + document.domain + ':' + location.port);
 
+      socket.on('update_state', (state) => {
+        console.log('Estado recibido del servidor:', state);
+        updateUI(state);
+      });
+      
+      // --- INICIO DE LA CORRECCIÓN ---
+
+      // 1. Escuchar el clic del botón "Añadir Nuevo Trabajo"
+      const btnAddJob = document.getElementById('btn-add-job');
+      if (btnAddJob) {
+        btnAddJob.addEventListener('click', () => {
+          // 2. Emitir el evento 'add_job' al servidor
+          socket.emit('add_job', {
+            description: 'Nuevo trabajo añadido por admin' 
+            // Podrías usar un prompt() para pedir una descripción:
+            // description: prompt('Descripción del nuevo trabajo:')
+          });
+        });
+      }
+
+      // 1. Escuchar el clic del botón "Añadir Nuevo Trabajo"
+      const btnAddJob = document.getElementById('btn-add-job');
+      if (btnAddJob) {
+        btnAddJob.addEventListener('click', () => {
+          // 2. Emitir el evento 'add_job' al servidor
+          socket.emit('add_job', {
+            description: 'Nuevo trabajo añadido por admin' 
+            // Podrías usar un prompt() para pedir una descripción:
+            // description: prompt('Descripción del nuevo trabajo:')
+          });
+        });
+      }
 
       // 3. Escuchar el evento 'update_state' del servidor
       socket.on('update_state', (state) => {

@@ -26,7 +26,9 @@ class JobService:
 class QueueService:
     """Gestiona TODAS las colas de usuarios (available, working, idle)."""
     def __init__(self):
-        # __init__ ya no necesita argumentos
+        self._available_users = []
+        self._working_users = []
+        self._idle_users = []
         self.db = None
         try:
             redis_url = os.environ.get("REDIS_URL")
@@ -95,6 +97,13 @@ class QueueService:
         if user_json:
             self.db.lrem(queue, 1, user_json)
 
+    def get_full_state(self):
+        return {
+            'available_users': [user.to_dict() for user in self._available_users],
+            'working_users': [user.to_dict() for user in self._working_users],
+            'idle_users': [user.to_dict() for user in self._idle_users],
+            'job_count': JobService().get_job_count() 
+        }
 # --- NUEVA CLASE UserService ---
 class UserService:
     # Base de datos de usuarios en memoria

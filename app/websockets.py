@@ -1,27 +1,24 @@
 from flask_login import current_user
 from flask_socketio import emit
-from .extensions import socketio # <- Por esta
+from .extensions import socketio
 from .python.service import QueueService
 from .python.service import JobService
 
 
 queue_service = QueueService()
 job_service = JobService()
-def register_websockets(socketio_instance):
-    
-    @socketio_instance.on('connect')
-    def handle_connect():
-        if current_user.is_authenticated:
-            queue_service.add_user_to_available(current_user)
-            socketio_instance.emit('update_queues')
-            print(f'Client connected: {current_user.name}')
+def register_websockets(socketio):
+    @socketio.on('connect')
+    def handle_connect(auth):
+        """Cliente conectado."""
+        print('Client connected', flush=True)
+        emit('update_state', queue_service.get_full_state())
             
-    @socketio_instance.on('disconnect')
+    @socketio.on('disconnect')
     def handle_disconnect():
-        if current_user.is_authenticated:
-            queue_service.remove_user_from_all_queues(current_user.id)
-            socketio_instance.emit('update_queues')
-            print(f'Client disconnected: {current_user.name}')
+        """Cliente desconectado."""
+        print('Client disconnected', flush=True)
+        emit('update_state', queue_service.get_full_state())
 
     @socketio.on('add_job')
     def handle_add_job(data):
@@ -36,4 +33,4 @@ def register_websockets(socketio_instance):
         # --- FIN DE LA CORRECCIÓN ---
         
         # Notificar a todos los clientes sobre el cambio en la cola 
-        emit('update_queue', job_service.get_queue_status(), broadcast=True)
+        emit('update_queue', job_service.get_job_count(), broadcast=True)
