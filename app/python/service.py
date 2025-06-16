@@ -4,24 +4,23 @@ import redis
 from app.models.User import User
 
 class JobService:
-    """Gestiona el contador de trabajos pendientes usando Redis."""
+    """
+    Servicio simplificado que solo gestiona un contador de trabajos.
+    """
     def __init__(self):
-        self.job_key = 'sosqueue_job_count'
-        self.db = None
-        try:
-            redis_url = os.environ.get("REDIS_URL")
-            if not redis_url:
-                raise ValueError("La variable de entorno REDIS_URL no está configurada.")
-            self.db = redis.from_url(redis_url, decode_responses=True)
-            self.db.ping()
-        except Exception as e:
-            print(f"ERROR CRÍTICO: No se pudo conectar con Redis para JobService. {e}")
+        self._job_count = 0
+
+    def increment_job_count(self):
+        """Suma 1 al contador de trabajos."""
+        self._job_count += 1
 
     def get_job_count(self):
-        """Devuelve el número de trabajos disponibles."""
-        if not self.db: return 0
-        count = self.db.get(self.job_key)
-        return int(count) if count else 0
+        """Devuelve el número actual de trabajos."""
+        return self._job_count
+
+    def decrement_job_count(self):
+        """Resta 1 al contador de trabajos."""
+        self._job_count -= 1
 
 class QueueService:
     """Gestiona TODAS las colas de usuarios (available, working, idle)."""

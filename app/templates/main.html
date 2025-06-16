@@ -110,93 +110,149 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // --- DATOS DEL USUARIO ACTUAL ---
+      // --- DATOS DEL USUARIO Y REFERENCIAS AL DOM ---
       const currentUserID = parseInt(document.body.dataset.userId, 10);
       const isAdmin = document.body.dataset.isAdmin === 'True';
       
-      // --- REFERENCIAS A ELEMENTOS DEL DOM ---
       const jobStatusWrapper = document.getElementById('job-status-wrapper');
       const mainActionButtonWrapper = document.getElementById('main-action-button-wrapper');
       const availableUsersList = document.getElementById('available-users-list');
       const workingUsersList = document.getElementById('working-users-list');
       const idleUsersList = document.getElementById('idle-users-list');
-
-      // --- FUNCIONES DE RENDERIZADO (permanecen iguales) ---
-      function renderJobStatus(state) { /* ... sin cambios ... */ }
-      function renderMainActionButton(state) { /* ... sin cambios ... */ }
-      function renderUserList(ulElement, users, status, state) { /* ... sin cambios ... */ }
-
+    
+      // --- FUNCIONES DE RENDERIZADO ---
+    
+      /**
+        * Actualiza el contador de trabajos.
+        */
+      function renderJobStatus(state) {
+        let content = '';
+        const count = state.job_count;
+        if (count === 0) {
+          content = '<p>No hay trabajos disponibles.</p>';
+        } else if (count === 1) {
+          content = '<p class="job-count-display">Hay 1 trabajo disponible</p>';
+        } else {
+          content = `<p class="job-count-display">Hay ${count} trabajos disponibles</p>`;
+        }
+        jobStatusWrapper.innerHTML = content;
+      }
+    
+      /**
+        * Muestra u oculta el botón "Ponerme Disponible".
+        */
+      function renderMainActionButton(state) {
+        const isActive = state.active_ids.includes(currentUserID);
+        if (!isAdmin && !isActive) {
+          mainActionButtonWrapper.innerHTML = '<button id="btn-available">Ponerme Disponible</button>';
+        } else {
+          mainActionButtonWrapper.innerHTML = '';
+        }
+      }
+    
+      /**
+        * Renderiza una lista completa de usuarios (disponibles, trabajando o en descanso).
+        */
+      function renderUserList(ulElement, users, status, state) {
+        ulElement.innerHTML = ''; // Limpiar la lista actual
+        if (users.length === 0) {
+          let message = 'No hay nadie disponible en este momento.';
+          if (status === 'working') message = 'Nadie está trabajando actualmente.';
+          if (status === 'idle') message = 'No hay nadie en descanso.';
+          ulElement.innerHTML = `<li class="empty-list-item">${message}</li>`;
+          return;
+        }
+    
+        users.forEach((user, index) => {
+          const li = document.createElement('li');
+          li.id = `user-${user.id}`;
+          li.className = status;
+    
+          const isCurrentUser = user.id === currentUserID;
+          let userControlsHTML = '<div class="user-controls">';
+    
+          // Lógica de botones para el usuario actual (no admin)
+          if (!isAdmin && isCurrentUser) {
+            if (status === 'available') {
+              if (index === 0 && state.job_count > 0) {
+                userControlsHTML += '<button data-action="work">Empezar Trabajo</button>';
+              }
+              userControlsHTML += '<button data-action="idle">Descansar</button>';
+            } else if (status === 'working') {
+              userControlsHTML += '<button data-action="finish">Terminar Trabajo</button>';
+            }
+          }
+    
+          // Lógica de botones para el administrador
+          if (isAdmin && status !== 'idle') {
+            if (status === 'available') {
+              userControlsHTML += `<button class="btn-admin" data-action="move-up" data-id="${user.id}" title="Subir">⬆️</button>`;
+              userControlsHTML += `<button class="btn-admin" data-action="move-down" data-id="${user.id}" title="Bajar">⬇️</button>`;
+            }
+            userControlsHTML += `<button class="btn-admin" data-action="set-idle" data-id="${user.id}" title="Mandar a Descanso">🛌</button>`;
+          }
+          
+          userControlsHTML += '</div>';
+          
+          li.innerHTML = `
+            <span class="user-name ${isCurrentUser ? 'current-user' : ''}">${user.name}</span>
+            ${userControlsHTML}
+          `;
+          ulElement.appendChild(li);
+        });
+      }
+    
+      /**
+        * Función principal que actualiza toda la interfaz de usuario.
+        */
       function updateUI(state) {
-        // Para renderMainActionButton, necesitamos el array active_ids
         const active_ids = [
             ...state.available_users.map(u => u.id),
             ...state.working_users.map(u => u.id)
         ];
         state.active_ids = active_ids;
-
+    
         renderJobStatus(state);
         renderMainActionButton(state);
         renderUserList(availableUsersList, state.available_users, 'available', state);
         renderUserList(workingUsersList, state.working_users, 'working', state);
         renderUserList(idleUsersList, state.idle_users, 'idle', state);
       }
-      
-      // --- LÓGICA DE WEBSOCKETS (reemplaza el polling) ---
-
-      // 2. Conectarse al servidor de Socket.IO
-      var socket = io.connect('http://' + document.domain + ':' + location.port);
-
+    
+      // --- LÓGICA DE WEBSOCKETS ---
+      const socket = io();
+    
+      // Escuchar el evento 'update_state' del servidor
       socket.on('update_state', (state) => {
         console.log('Estado recibido del servidor:', state);
         updateUI(state);
       });
       
-      // --- INICIO DE LA CORRECCIÓN ---
+      // --- MANEJO CENTRALIZADO DE EVENTOS ---
+    
+      document.body.addEventListener('click', (event) => {
+        const button = event.target;
 
-      // 1. Escuchar el clic del botón "Añadir Nuevo Trabajo"
-      const btnAddJob = document.getElementById('btn-add-job');
-      if (btnAddJob) {
-        btnAddJob.addEventListener('click', () => {
-          // 2. Emitir el evento 'add_job' al servidor
-          socket.emit('add_job', {
-            description: 'Nuevo trabajo añadido por admin' 
-            // Podrías usar un prompt() para pedir una descripción:
-            // description: prompt('Descripción del nuevo trabajo:')
-          });
-        });
-      }
-
-      // 1. Escuchar el clic del botón "Añadir Nuevo Trabajo"
-      const btnAddJob = document.getElementById('btn-add-job');
-      if (btnAddJob) {
-        btnAddJob.addEventListener('click', () => {
-          // 2. Emitir el evento 'add_job' al servidor
-          socket.emit('add_job', {
-            description: 'Nuevo trabajo añadido por admin' 
-            // Podrías usar un prompt() para pedir una descripción:
-            // description: prompt('Descripción del nuevo trabajo:')
-          });
-        });
-      }
-
-      // 3. Escuchar el evento 'update_state' del servidor
-      socket.on('update_state', (state) => {
-        console.log('Estado recibido del servidor:', state);
-        updateUI(state);
+        // Botón "Añadir Nuevo Trabajo" (usa WebSocket)
+        if (button.id === 'btn-add-job') {
+            // CORRECCIÓN: Ya no pide descripción, solo emite el evento.
+            socket.emit('add_job');
+            return;
+        }
+        
+        // Botón "Ponerme Disponible" (usa WebSocket)
+        if (button.id === 'btn-available') {
+            socket.emit('set_available');
+            return;
+        }
+    
+        // Botones con 'data-action' (usan WebSocket)
+        const action = button.dataset.action;
+        if (action) {
+          const userId = button.dataset.id || null; // El ID solo es para acciones de admin
+          socket.emit(action, { user_id: userId });
+        }
       });
-
-      const callAction = (endpoint) => {
-        fetch(`{{ url_for('sosqueue.index') }}${endpoint}`, { method: 'POST' })
-          .then(res => {
-            if (!res.ok) return res.json().then(err => { throw new Error(err.error || 'Error desconocido') });
-            // YA NO es necesario llamar a fetchAndUpdateState() aquí.
-            // El backend emitirá el cambio automáticamente.
-          })
-          .catch(err => alert(`Error: ${err.message}`));
-      };
-
-      // --- MANEJO CENTRALIZADO DE EVENTOS (sin cambios) ---
-      document.body.addEventListener('click', (event) => { /* ... sin cambios ... */ });
     });
   </script>
 </body>
