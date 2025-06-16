@@ -98,12 +98,18 @@ class QueueService:
 
     def get_full_state(self):
         """
-        Devuelve SOLO el estado de las colas de usuarios.
+        Devuelve el estado completo de todas las colas de usuarios desde Redis.
         """
+        if not self.db:
+            return {
+                'available_users': [],
+                'working_users': [],
+                'idle_users': [],
+            }
         return {
-            'available_users': [user.to_dict() for user in self._available_users],
-            'working_users': [user.to_dict() for user in self._working_users],
-            'idle_users': [user.to_dict() for user in self._idle_users],
+            'available_users': self.get_queue('sosq:available'),
+            'working_users': self.get_queue('sosq:working'),
+            'idle_users': self.get_queue('sosq:idle'),
         }
 class UserService:
     # Base de datos de usuarios en memoria
