@@ -97,13 +97,14 @@ class QueueService:
             self.db.lrem(queue, 1, user_json)
 
     def get_full_state(self):
+        """
+        Devuelve SOLO el estado de las colas de usuarios.
+        """
         return {
             'available_users': [user.to_dict() for user in self._available_users],
             'working_users': [user.to_dict() for user in self._working_users],
             'idle_users': [user.to_dict() for user in self._idle_users],
-            'job_count': JobService().get_job_count() 
         }
-# --- NUEVA CLASE UserService ---
 class UserService:
     # Base de datos de usuarios en memoria
     _CREDENTIALS = {

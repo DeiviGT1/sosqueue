@@ -17,12 +17,12 @@
   <section class="queue-container job-container">
     <h2 class="queue-title">📋 Trabajos Pendientes</h2>
     <div id="job-status-wrapper">
-      {% if job_count == 0 %}
-        <p>No hay trabajos disponibles.</p>
-      {% elif job_count == 1 %}
+      {% if job_count == 1 %}
         <p class="job-count-display">Hay 1 trabajo disponible</p>
-      {% else %}
+      {% elif job_count > 1 and job_count|int == job_count %}
         <p class="job-count-display">Hay {{ job_count }} trabajos disponibles</p>
+      {% else %}
+        <p>No hay trabajos disponibles.</p>
       {% endif %}
     </div>
     {% if current_user.is_authenticated and current_user.is_admin %}
@@ -108,10 +108,12 @@
     </section>
   </section>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js">
+  </script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       // --- DATOS DEL USUARIO Y REFERENCIAS AL DOM ---
-      const currentUserID = parseInt(document.body.dataset.userId, 10);
+      const currentUserID = document.body.dataset.userId ? parseInt(document.body.dataset.userId, 10) : null;
       const isAdmin = document.body.dataset.isAdmin === 'True';
       
       const jobStatusWrapper = document.getElementById('job-status-wrapper');
@@ -119,15 +121,18 @@
       const availableUsersList = document.getElementById('available-users-list');
       const workingUsersList = document.getElementById('working-users-list');
       const idleUsersList = document.getElementById('idle-users-list');
-    
+
       // --- FUNCIONES DE RENDERIZADO ---
-    
+
       /**
-        * Actualiza el contador de trabajos.
-        */
+       * Actualiza dinámicamente el texto del contador de trabajos.
+       */
       function renderJobStatus(state) {
+        console.log(`[CLIENTE] Renderizando estado del trabajo. Contador actual: ${state.job_count}`);
+        
         let content = '';
         const count = state.job_count;
+
         if (count === 0) {
           content = '<p>No hay trabajos disponibles.</p>';
         } else if (count === 1) {
@@ -137,10 +142,10 @@
         }
         jobStatusWrapper.innerHTML = content;
       }
-    
+
       /**
-        * Muestra u oculta el botón "Ponerme Disponible".
-        */
+       * Muestra u oculta el botón "Ponerme Disponible".
+       */
       function renderMainActionButton(state) {
         const isActive = state.active_ids.includes(currentUserID);
         if (!isAdmin && !isActive) {
@@ -149,10 +154,10 @@
           mainActionButtonWrapper.innerHTML = '';
         }
       }
-    
+
       /**
-        * Renderiza una lista completa de usuarios (disponibles, trabajando o en descanso).
-        */
+       * Renderiza una lista completa de usuarios (disponibles, trabajando o en descanso).
+       */
       function renderUserList(ulElement, users, status, state) {
         ulElement.innerHTML = ''; // Limpiar la lista actual
         if (users.length === 0) {
@@ -162,16 +167,15 @@
           ulElement.innerHTML = `<li class="empty-list-item">${message}</li>`;
           return;
         }
-    
+
         users.forEach((user, index) => {
           const li = document.createElement('li');
           li.id = `user-${user.id}`;
           li.className = status;
-    
+
           const isCurrentUser = user.id === currentUserID;
           let userControlsHTML = '<div class="user-controls">';
-    
-          // Lógica de botones para el usuario actual (no admin)
+
           if (!isAdmin && isCurrentUser) {
             if (status === 'available') {
               if (index === 0 && state.job_count > 0) {
@@ -182,8 +186,7 @@
               userControlsHTML += '<button data-action="finish">Terminar Trabajo</button>';
             }
           }
-    
-          // Lógica de botones para el administrador
+
           if (isAdmin && status !== 'idle') {
             if (status === 'available') {
               userControlsHTML += `<button class="btn-admin" data-action="move-up" data-id="${user.id}" title="Subir">⬆️</button>`;
@@ -201,55 +204,57 @@
           ulElement.appendChild(li);
         });
       }
-    
+
       /**
-        * Función principal que actualiza toda la interfaz de usuario.
-        */
+       * Función principal que orquesta la actualización de toda la interfaz de usuario.
+       */
       function updateUI(state) {
         const active_ids = [
             ...state.available_users.map(u => u.id),
             ...state.working_users.map(u => u.id)
         ];
         state.active_ids = active_ids;
-    
+
         renderJobStatus(state);
         renderMainActionButton(state);
         renderUserList(availableUsersList, state.available_users, 'available', state);
         renderUserList(workingUsersList, state.working_users, 'working', state);
         renderUserList(idleUsersList, state.idle_users, 'idle', state);
       }
-    
+
       // --- LÓGICA DE WEBSOCKETS ---
       const socket = io();
-    
-      // Escuchar el evento 'update_state' del servidor
+
       socket.on('update_state', (state) => {
-        console.log('Estado recibido del servidor:', state);
+        console.log('[CLIENTE] Recibido evento "update_state" con datos:', state);
         updateUI(state);
       });
       
       // --- MANEJO CENTRALIZADO DE EVENTOS ---
-    
+
       document.body.addEventListener('click', (event) => {
         const button = event.target;
 
         // Botón "Añadir Nuevo Trabajo" (usa WebSocket)
         if (button.id === 'btn-add-job') {
-            // CORRECCIÓN: Ya no pide descripción, solo emite el evento.
-            socket.emit('add_job');
-            return;
+          console.log('[CLIENTE] Botón "Añadir Nuevo Trabajo" presionado.');
+          console.log("[CLIENTE] Enviando evento 'add_job' al servidor...");
+          socket.emit('add_job');
+          return;
         }
         
         // Botón "Ponerme Disponible" (usa WebSocket)
         if (button.id === 'btn-available') {
+            console.log("[CLIENTE] Enviando evento 'set_available' al servidor...");
             socket.emit('set_available');
             return;
         }
-    
+
         // Botones con 'data-action' (usan WebSocket)
         const action = button.dataset.action;
         if (action) {
-          const userId = button.dataset.id || null; // El ID solo es para acciones de admin
+          const userId = button.dataset.id || null;
+          console.log(`[CLIENTE] Enviando evento '${action}' al servidor...`, userId ? { user_id: userId } : {});
           socket.emit(action, { user_id: userId });
         }
       });
