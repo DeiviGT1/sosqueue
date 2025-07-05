@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify
 from ..python.service import QueueService, JobService
+from flask_login import login_required
 
 sos_bp = Blueprint('sosqueue', __name__)
 
@@ -8,6 +9,7 @@ queue_service = QueueService()
 job_service = JobService()
 
 @sos_bp.route('/')
+@login_required
 def index():
     # Usamos el servicio único para obtener cada cola
     available_users = queue_service.get_queue('sosq:available')
