@@ -1,7 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify
-from flask_login import login_required, current_user
 from ..python.service import QueueService, JobService
-from ..extensions import socketio
 
 sos_bp = Blueprint('sosqueue', __name__)
 
@@ -10,7 +8,6 @@ queue_service = QueueService()
 job_service = JobService()
 
 @sos_bp.route('/')
-@login_required
 def index():
     # Usamos el servicio único para obtener cada cola
     available_users = queue_service.get_queue('sosq:available')
@@ -26,27 +23,24 @@ def index():
 
 
 @sos_bp.route('/move_to_working', methods=['POST'])
-@login_required
 def move_to_working():
     user_id = int(request.form['user_id'])
     queue_service.move_to_working(user_id)
-    socketio.emit('update_queues', namespace='/')
+
     return jsonify(success=True)
 
 
 @sos_bp.route('/move_to_idle', methods=['POST'])
-@login_required
 def move_to_idle():
     user_id = int(request.form['user_id'])
     queue_service.move_to_idle(user_id)
-    socketio.emit('update_queues', namespace='/')
+    
     return jsonify(success=True)
 
 
 @sos_bp.route('/move_to_available', methods=['POST'])
-@login_required
 def move_to_available():
     user_id = int(request.form['user_id'])
     queue_service.move_to_available(user_id)
-    socketio.emit('update_queues', namespace='/')
+
     return jsonify(success=True)

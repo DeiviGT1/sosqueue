@@ -1,6 +1,5 @@
 import os
 import json
-import redis
 from app.models.User import User
 
 class JobService:
@@ -29,14 +28,7 @@ class QueueService:
         self._working_users = []
         self._idle_users = []
         self.db = None
-        try:
-            redis_url = os.environ.get("REDIS_URL")
-            if not redis_url:
-                raise ValueError("La variable de entorno REDIS_URL no está configurada.")
-            self.db = redis.from_url(redis_url, decode_responses=True)
-            self.db.ping()
-        except Exception as e:
-            print(f"ERROR CRÍTICO: No se pudo conectar con Redis. {e}")
+
             
     def _get_user_from_queues(self, user_id, queues):
         """Busca un usuario en una lista de colas."""

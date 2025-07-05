@@ -9,7 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
 
 </head> 
-<body data-user-id="{{ current_user.id }}" data-is-admin="{{ current_user.is_admin }}">
+<body>
   <header>
     <h1>Cola de Trabajo</h1>
   </header>
@@ -25,16 +25,12 @@
         <p>No hay trabajos disponibles.</p>
       {% endif %}
     </div>
-    {% if current_user.is_authenticated and current_user.is_admin %}
-      <button id="btn-add-job">Añadir Nuevo Trabajo</button>
-    {% endif %}
+
   </section>
 
   <section id="user-container" class="queue-container">
     <div id="main-action-button-wrapper">
-      {% if current_user.is_authenticated and not current_user.is_admin and current_user.id not in active_ids %}
-        <button id="btn-available">Ponerme Disponible</button>
-      {% endif %}
+
     </div>
 
     <div class="queue-section">
@@ -42,19 +38,7 @@
       <ul id="available-users-list" class="user-queue">
         {% for user in available_users %}
           <li id="user-{{ user.id }}" class="available">
-            <span class="user-name {% if user.id == current_user.id %}current-user{% endif %}">{{ user.name }}</span>
-            <div class="user-controls">
-              {% if not current_user.is_admin and user.id == current_user.id %}
-                {% if loop.first and job_count > 0 %}
-                  <button data-action="work">Empezar Trabajo</button>
-                {% endif %}
-                <button data-action="idle">Descansar</button>
-              {% endif %}
-              {% if current_user.is_admin %}
-                <button class="btn-admin" data-action="move-up" data-id="{{ user.id }}" title="Subir">⬆️</button>
-                <button class="btn-admin" data-action="move-down" data-id="{{ user.id }}" title="Bajar">⬇️</button>
-                <button class="btn-admin" data-action="set-idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
-              {% endif %}
+
             </div>
           </li>
         {% else %}
@@ -70,14 +54,8 @@
       <ul id="working-users-list" class="user-queue">
         {% for user in working_users %}
           <li id="user-{{ user.id }}" class="working">
-            <span class="user-name {% if user.id == current_user.id %}current-user{% endif %}">{{ user.name }}</span>
             <div class="user-controls">
-              {% if not current_user.is_admin and user.id == current_user.id %}
-                <button data-action="finish">Terminar Trabajo</button>
-              {% endif %}
-              {% if current_user.is_admin %}
-                <button class="btn-admin" data-action="set-idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
-              {% endif %}
+
             </div>
           </li>
         {% else %}
@@ -93,7 +71,7 @@
       <ul id="idle-users-list" class="user-queue">
         {% for user in idle_users %}
           <li id="user-{{ user.id }}" class="idle">
-            <span class="user-name {% if user.id == current_user.id %}current-user{% endif %}">{{ user.name }}</span>
+
           </li>
         {% else %}
           <li class="empty-list-item">No hay nadie en descanso.</li>
@@ -102,9 +80,7 @@
     </div>
     
     <section class="logout-section">
-      {% if current_user.is_authenticated %}
-        <a href="{{ url_for('auth.logout') }}">Cerrar sesión ({{ current_user.name }})</a>
-      {% endif %}
+
     </section>
   </section>
 

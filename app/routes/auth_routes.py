@@ -1,15 +1,13 @@
 # app/routes/auth_routes.py
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_user, logout_user, current_user
+from flask_login import login_user, logout_user
 from ..python.service import UserService
 
 auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('sosqueue.index'))
 
     if request.method == 'POST':
         username = request.form['username']
