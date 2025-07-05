@@ -1,6 +1,4 @@
-import os
 import json
-from app.models.User import User
 
 class JobService:
     """
@@ -18,91 +16,86 @@ class JobService:
         return self._job_count
 
     def decrement_job_count(self):
-        """Resta 1 al contador de trabajos."""
-        self._job_count -= 1
+        """Resta 1 al contador de trabajos, sin bajar de cero."""
+        if self._job_count > 0:
+            self._job_count -= 1
 
 class QueueService:
-    """Gestiona TODAS las colas de usuarios (available, working, idle)."""
+    """
+    Gestiona las colas de usuarios (disponibles, trabajando, descanso) en memoria.
+    """
     def __init__(self):
         self._available_users = []
         self._working_users = []
         self._idle_users = []
-        self.db = None
 
-            
-    def _get_user_from_queues(self, user_id, queues):
-        """Busca un usuario en una lista de colas."""
-        if not self.db: return None, None
-        for queue in queues:
-            for item_json in self.db.lrange(queue, 0, -1):
-                if json.loads(item_json).get('id') == user_id:
-                    return item_json, queue
-        return None, None
+    def _find_user_in_queue(self, user_id, queue):
+        """Busca un usuario por ID en una cola específica."""
+        for user in queue:
+            if user.get('id') == user_id:
+                return user
+        return None
 
-    def get_queue(self, queue_name):
-        """Devuelve una cola específica como una lista de diccionarios."""
-        if not self.db: return []
-        return [json.loads(item) for item in self.db.lrange(queue_name, 0, -1)]
+    def _remove_user_from_all_queues(self, user_id):
+        """Elimina a un usuario de todas las colas para evitar duplicados."""
+        self._available_users = [u for u in self._available_users if u['id'] != user_id]
+        self._working_users = [u for u in self._working_users if u['id'] != user_id]
+        self._idle_users = [u for u in self._idle_users if u['id'] != user_id]
 
     def join_available(self, user):
-        """Añade un usuario a la cola de disponibles si no existe."""
-        if not self.db or not user: return
-        
-        # Evitar duplicados en todas las colas
-        all_queues = ['sosq:available', 'sosq:working', 'sosq:idle']
-        user_json, _ = self._get_user_from_queues(user.id, all_queues)
-        if user_json:
-            return
-
-        user_data = {'id': user.id, 'name': user.name, 'pin': user.pin}
-        self.db.rpush('sosq:available', json.dumps(user_data))
+        """Añade un usuario a la cola de disponibles si no está en ninguna otra."""
+        self._remove_user_from_all_queues(user.id)
+        user_data = {'id': user.id, 'name': user.name}
+        self._available_users.append(user_data)
 
     def move_to_working(self, user_id):
         """Mueve un usuario de 'available' a 'working'."""
-        if not self.db: return
-        user_json, queue = self._get_user_from_queues(user_id, ['sosq:available'])
-        if user_json:
-            self.db.lrem(queue, 1, user_json)
-            self.db.rpush('sosq:working', user_json)
+        user = self._find_user_in_queue(user_id, self._available_users)
+        if user:
+            self._available_users.remove(user)
+            self._working_users.append(user)
+            return True
+        return False
 
     def move_to_idle(self, user_id):
-        """Mueve un usuario de 'working' a 'idle'."""
-        if not self.db: return
-        user_json, queue = self._get_user_from_queues(user_id, ['sosq:working'])
-        if user_json:
-            self.db.lrem(queue, 1, user_json)
-            self.db.rpush('sosq:idle', user_json)
+        """Mueve un usuario desde cualquier cola activa a 'idle'."""
+        user = self._find_user_in_queue(user_id, self._available_users)
+        if user:
+            self._available_users.remove(user)
+            self._idle_users.append(user)
+            return
+
+        user = self._find_user_in_queue(user_id, self._working_users)
+        if user:
+            self._working_users.remove(user)
+            self._idle_users.append(user)
 
     def move_to_available(self, user_id):
-        """Devuelve a un usuario a 'available' desde cualquier otra cola."""
-        if not self.db: return
-        user_json, queue = self._get_user_from_queues(user_id, ['sosq:working', 'sosq:idle'])
-        if user_json:
-            self.db.lrem(queue, 1, user_json)
-            self.db.rpush('sosq:available', user_json)
+        """Mueve a un usuario de vuelta a 'available' desde 'working' o 'idle'."""
+        self._remove_user_from_all_queues(user_id)
+        user_credentials = UserService.get_user_by_id(user_id)
+        if user_credentials:
+            self.join_available(user_credentials)
 
-    def remove_from_all_queues(self, user_id):
-        """Elimina a un usuario de todas las colas."""
-        if not self.db: return
-        user_json, queue = self._get_user_from_queues(user_id, ['sosq:available', 'sosq:working', 'sosq:idle'])
-        if user_json:
-            self.db.lrem(queue, 1, user_json)
+    def get_queue(self, queue_name):
+        """Devuelve la cola solicitada."""
+        if queue_name == 'sosq:available':
+            return self._available_users
+        elif queue_name == 'sosq:working':
+            return self._working_users
+        elif queue_name == 'sosq:idle':
+            return self._idle_users
+        else:
+            raise ValueError(f"Cola desconocida: {queue_name}")
 
     def get_full_state(self):
-        """
-        Devuelve el estado completo de todas las colas de usuarios desde Redis.
-        """
-        if not self.db:
-            return {
-                'available_users': [],
-                'working_users': [],
-                'idle_users': [],
-            }
+        """Devuelve el estado completo de todas las colas."""
         return {
-            'available_users': self.get_queue('sosq:available'),
-            'working_users': self.get_queue('sosq:working'),
-            'idle_users': self.get_queue('sosq:idle'),
+            'available_users': self._available_users,
+            'working_users': self._working_users,
+            'idle_users': self._idle_users,
         }
+
 class UserService:
     # Base de datos de usuarios en memoria
     _CREDENTIALS = {
@@ -116,6 +109,7 @@ class UserService:
     @classmethod
     def get_user_by_id(cls, user_id):
         """Busca un usuario por su ID y devuelve un objeto User."""
+        from app.models.User import User
         for uname, cred in cls._CREDENTIALS.items():
             if cred['id'] == int(user_id):
                 return User(
@@ -129,6 +123,7 @@ class UserService:
     @classmethod
     def get_user_by_name(cls, username):
         """Busca un usuario por su nombre y devuelve un objeto User."""
+        from app.models.User import User
         if username in cls._CREDENTIALS:
             cred = cls._CREDENTIALS[username]
             return User(
