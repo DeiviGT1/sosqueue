@@ -52,9 +52,9 @@
             {% endif %}
               
               {% if current_user.is_admin %}
-                <button class="btn-admin" data-action="move-up" data-id="{{ user.id }}" title="Subir">⬆️</button>
-                <button class="btn-admin" data-action="move-down" data-id="{{ user.id }}" title="Bajar">⬇️</button>
-                <button class="btn-admin" data-action="set-idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
+                <button class="btn-admin" data-action="move_up" data-id="{{ user.id }}" title="Subir">⬆️</button>
+                <button class="btn-admin" data-action="move_down" data-id="{{ user.id }}" title="Bajar">⬇️</button>
+                <button class="btn-admin" data-action="set_idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
               {% endif %}
             </div>
           </li>
@@ -77,7 +77,7 @@
                 <button data-action="set_idle">Terminar Trabajo</button>
               {% endif %}
               {% if current_user.is_admin %}
-                <button class="btn-admin" data-action="set-idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
+                <button class="btn-admin" data-action="set_idle" data-id="{{ user.id }}" title="Mandar a Descanso">🛌</button>
               {% endif %}
             </div>
           </li>
@@ -190,10 +190,10 @@
 
           if (isAdmin && status !== 'idle') {
             if (status === 'available') {
-              userControlsHTML += `<button class="btn-admin" data-action="move-up" data-id="${user.id}" title="Subir">⬆️</button>`;
-              userControlsHTML += `<button class="btn-admin" data-action="move-down" data-id="${user.id}" title="Bajar">⬇️</button>`;
+              userControlsHTML += `<button class="btn-admin" data-action="move_up" data-id="${user.id}" title="Subir">⬆️</button>`;
+              userControlsHTML += `<button class="btn-admin" data-action="move_down" data-id="${user.id}" title="Bajar">⬇️</button>`;
             }
-            userControlsHTML += `<button class="btn-admin" data-action="set-idle" data-id="${user.id}" title="Mandar a Descanso">🛌</button>`;
+            userControlsHTML += `<button class="btn-admin" data-action="set_idle" data-id="${user.id}" title="Mandar a Descanso">🛌</button>`;
           }
           
           userControlsHTML += '</div>';
@@ -254,9 +254,10 @@
         // Botones con 'data-action' (usan WebSocket)
         const action = button.dataset.action;
         if (action) {
-          const userId = button.dataset.id || null;
-          console.log(`[CLIENTE] Enviando evento '${action}' al servidor...`, userId ? { user_id: userId } : {});
-          socket.emit(action, { user_id: userId });
+          const userId = button.dataset.id;
+          const payload = userId ? { user_id: parseInt(userId) } : null;
+          console.log(`[CLIENTE] Enviando evento '${action}' al servidor...`, payload);
+          socket.emit(action, payload);
         }
       });
     });

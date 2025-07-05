@@ -88,6 +88,24 @@ class QueueService:
         else:
             raise ValueError(f"Cola desconocida: {queue_name}")
 
+    def move_user_up(self, user_id):
+        """Mueve un usuario una posición hacia arriba en la cola de disponibles."""
+        for i, user in enumerate(self._available_users):
+            # No se puede mover más arriba si ya es el primero (índice 0)
+            if user['id'] == user_id and i > 0:
+                # Intercambia el usuario con el que está antes
+                self._available_users[i], self._available_users[i-1] = self._available_users[i-1], self._available_users[i]
+                break
+
+    def move_user_down(self, user_id):
+        """Mueve un usuario una posición hacia abajo en la cola de disponibles."""
+        for i, user in enumerate(self._available_users):
+            # No se puede mover más abajo si ya es el último
+            if user['id'] == user_id and i < len(self._available_users) - 1:
+                # Intercambia el usuario con el que está después
+                self._available_users[i], self._available_users[i+1] = self._available_users[i+1], self._available_users[i]
+                break
+
     def get_full_state(self):
         """Devuelve el estado completo de todas las colas."""
         return {
