@@ -1,74 +1,133 @@
 import json
+import os
+import redis
+from app.models.User import User
+
+# --- 1. Conexión a Redis ---
+# Se conecta usando la variable de entorno REDIS_URL que configuraste en Vercel.
+# Si no la encuentra, la aplicación mostrará un error en los logs.
+try:
+    # Usamos decode_responses=True para que Redis nos devuelva strings en lugar de bytes.
+    redis_url = os.environ.get("REDIS_URL")
+    if not redis_url:
+        raise redis.exceptions.ConnectionError("La variable de entorno REDIS_URL no está definida.")
+    
+    redis_client = redis.from_url(redis_url, decode_responses=True)
+    redis_client.ping()
+    print("Conexión a Redis establecida exitosamente.")
+except redis.exceptions.ConnectionError as e:
+    print(f"ADVERTENCIA: No se pudo conectar a Redis. La aplicación se ejecutará sin persistencia de datos. Error: {e}")
+    # --- CORRECCIÓN ---
+    # Si no hay conexión, creamos un objeto "falso" que imita el comportamiento de Redis
+    # para evitar que la aplicación se caiga durante el desarrollo local.
+    from unittest.mock import Mock
+    redis_client = Mock()
+    # Configuramos el Mock para que devuelva valores por defecto seguros.
+    redis_client.get.return_value = 0  # Para get_job_count
+    redis_client.lrange.return_value = [] # Para get_queue
+
+# --- 2. Nombres de las Claves en Redis ---
+# Usamos constantes para evitar errores de tipeo al referirnos a nuestras listas en Redis.
+AVAILABLE_QUEUE_KEY = 'sosq:available'
+WORKING_QUEUE_KEY = 'sosq:working'
+IDLE_QUEUE_KEY = 'sosq:idle'
+JOB_COUNT_KEY = 'sosq:job_count'
+
+# --- 3. Clases de Servicio Modificadas ---
 
 class JobService:
     """
-    Servicio simplificado que solo gestiona un contador de trabajos.
+    Servicio que gestiona un contador de trabajos usando Redis para persistencia.
     """
-    def __init__(self):
-        self._job_count = 0
+    def __init__(self, client):
+        self.redis = client
 
     def increment_job_count(self):
-        """Suma 1 al contador de trabajos."""
-        self._job_count += 1
+        """Suma 1 al contador de trabajos en Redis."""
+        self.redis.incr(JOB_COUNT_KEY)
 
     def get_job_count(self):
-        """Devuelve el número actual de trabajos."""
-        return self._job_count
+        """Devuelve el número actual de trabajos desde Redis."""
+        count = self.redis.get(JOB_COUNT_KEY)
+        return int(count) if count else 0
 
     def decrement_job_count(self):
         """Resta 1 al contador de trabajos, sin bajar de cero."""
-        if self._job_count > 0:
-            self._job_count -= 1
+        # Este script LUA asegura que la operación es atómica y segura.
+        lua_script = """
+        local current = tonumber(redis.call('get', KEYS[1]))
+        if current and current > 0 then
+            return redis.call('decr', KEYS[1])
+        end
+        return current
+        """
+        self.redis.eval(lua_script, 1, JOB_COUNT_KEY)
+
 
 class QueueService:
     """
-    Gestiona las colas de usuarios (disponibles, trabajando, descanso) en memoria.
+    Gestiona las colas de usuarios (disponibles, trabajando, descanso) en Redis.
     """
-    def __init__(self):
-        self._available_users = []
-        self._working_users = []
-        self._idle_users = []
+    def __init__(self, client):
+        self.redis = client
 
-    def _find_user_in_queue(self, user_id, queue):
-        """Busca un usuario por ID en una cola específica."""
-        for user in queue:
-            if user.get('id') == user_id:
-                return user
+    def _serialize_user(self, user_data):
+        """Convierte un diccionario de usuario a un string JSON para guardarlo."""
+        return json.dumps(user_data)
+
+    def _deserialize_user(self, user_json):
+        """Convierte un string JSON de vuelta a un diccionario de usuario."""
+        return json.loads(user_json)
+
+    def _find_user_in_queue(self, user_id, queue_key):
+        """Busca un usuario por ID en una cola de Redis y devuelve su JSON."""
+        for user_json in self.redis.lrange(queue_key, 0, -1):
+            if self._deserialize_user(user_json).get('id') == user_id:
+                return user_json
         return None
 
     def _remove_user_from_all_queues(self, user_id):
         """Elimina a un usuario de todas las colas para evitar duplicados."""
-        self._available_users = [u for u in self._available_users if u['id'] != user_id]
-        self._working_users = [u for u in self._working_users if u['id'] != user_id]
-        self._idle_users = [u for u in self._idle_users if u['id'] != user_id]
+        for queue_key in [AVAILABLE_QUEUE_KEY, WORKING_QUEUE_KEY, IDLE_QUEUE_KEY]:
+            user_to_remove = self._find_user_in_queue(user_id, queue_key)
+            if user_to_remove:
+                self.redis.lrem(queue_key, 1, user_to_remove)
 
     def join_available(self, user):
         """Añade un usuario a la cola de disponibles si no está en ninguna otra."""
         self._remove_user_from_all_queues(user.id)
         user_data = {'id': user.id, 'name': user.name}
-        self._available_users.append(user_data)
+        # rpush añade al final de la lista.
+        self.redis.rpush(AVAILABLE_QUEUE_KEY, self._serialize_user(user_data))
 
     def move_to_working(self, user_id):
         """Mueve un usuario de 'available' a 'working'."""
-        user = self._find_user_in_queue(user_id, self._available_users)
-        if user:
-            self._available_users.remove(user)
-            self._working_users.append(user)
+        user_to_move = self._find_user_in_queue(user_id, AVAILABLE_QUEUE_KEY)
+        if user_to_move:
+            # lrem lo quita de la lista de disponibles.
+            self.redis.lrem(AVAILABLE_QUEUE_KEY, 1, user_to_move)
+            # rpush lo añade a la lista de trabajando.
+            self.redis.rpush(WORKING_QUEUE_KEY, user_to_move)
             return True
         return False
 
     def move_to_idle(self, user_id):
         """Mueve un usuario desde cualquier cola activa a 'idle'."""
-        user = self._find_user_in_queue(user_id, self._available_users)
-        if user:
-            self._available_users.remove(user)
-            self._idle_users.append(user)
-            return
+        user_data = None
+        # Buscar en 'available'
+        user_in_available = self._find_user_in_queue(user_id, AVAILABLE_QUEUE_KEY)
+        if user_in_available:
+            self.redis.lrem(AVAILABLE_QUEUE_KEY, 1, user_in_available)
+            user_data = user_in_available
+        
+        # Buscar en 'working'
+        user_in_working = self._find_user_in_queue(user_id, WORKING_QUEUE_KEY)
+        if user_in_working:
+            self.redis.lrem(WORKING_QUEUE_KEY, 1, user_in_working)
+            user_data = user_in_working
 
-        user = self._find_user_in_queue(user_id, self._working_users)
-        if user:
-            self._working_users.remove(user)
-            self._idle_users.append(user)
+        if user_data:
+            self.redis.rpush(IDLE_QUEUE_KEY, user_data)
 
     def move_to_available(self, user_id):
         """Mueve a un usuario de vuelta a 'available' desde 'working' o 'idle'."""
@@ -78,44 +137,65 @@ class QueueService:
             self.join_available(user_credentials)
 
     def get_queue(self, queue_name):
-        """Devuelve la cola solicitada."""
-        if queue_name == 'sosq:available':
-            return self._available_users
-        elif queue_name == 'sosq:working':
-            return self._working_users
-        elif queue_name == 'sosq:idle':
-            return self._idle_users
-        else:
+        """Devuelve la cola solicitada desde Redis."""
+        # Mapeamos los nombres antiguos a las nuevas claves de Redis
+        queue_mapping = {
+            'sosq:available': AVAILABLE_QUEUE_KEY,
+            'sosq:working': WORKING_QUEUE_KEY,
+            'sosq:idle': IDLE_QUEUE_KEY
+        }
+        redis_key = queue_mapping.get(queue_name)
+        if not redis_key:
             raise ValueError(f"Cola desconocida: {queue_name}")
+        
+        users_json = self.redis.lrange(redis_key, 0, -1)
+        return [self._deserialize_user(u) for u in users_json]
 
     def move_user_up(self, user_id):
         """Mueve un usuario una posición hacia arriba en la cola de disponibles."""
-        for i, user in enumerate(self._available_users):
-            # No se puede mover más arriba si ya es el primero (índice 0)
-            if user['id'] == user_id and i > 0:
-                # Intercambia el usuario con el que está antes
-                self._available_users[i], self._available_users[i-1] = self._available_users[i-1], self._available_users[i]
-                break
+        users = self.get_queue('sosq:available')
+        try:
+            index = next(i for i, user in enumerate(users) if user['id'] == user_id)
+        except StopIteration:
+            return
+
+        if index > 0:
+            users.insert(index - 1, users.pop(index))
+            # Actualizamos la lista completa en Redis
+            pipe = self.redis.pipeline()
+            pipe.delete(AVAILABLE_QUEUE_KEY)
+            if users:
+                pipe.rpush(AVAILABLE_QUEUE_KEY, *[self._serialize_user(u) for u in users])
+            pipe.execute()
 
     def move_user_down(self, user_id):
         """Mueve un usuario una posición hacia abajo en la cola de disponibles."""
-        for i, user in enumerate(self._available_users):
-            # No se puede mover más abajo si ya es el último
-            if user['id'] == user_id and i < len(self._available_users) - 1:
-                # Intercambia el usuario con el que está después
-                self._available_users[i], self._available_users[i+1] = self._available_users[i+1], self._available_users[i]
-                break
+        users = self.get_queue('sosq:available')
+        try:
+            index = next(i for i, user in enumerate(users) if user['id'] == user_id)
+        except StopIteration:
+            return
+
+        if index < len(users) - 1:
+            users.insert(index + 1, users.pop(index))
+            # Actualizamos la lista completa en Redis
+            pipe = self.redis.pipeline()
+            pipe.delete(AVAILABLE_QUEUE_KEY)
+            if users:
+                pipe.rpush(AVAILABLE_QUEUE_KEY, *[self._serialize_user(u) for u in users])
+            pipe.execute()
 
     def get_full_state(self):
-        """Devuelve el estado completo de todas las colas."""
+        """Devuelve el estado completo de todas las colas desde Redis."""
         return {
-            'available_users': self._available_users,
-            'working_users': self._working_users,
-            'idle_users': self._idle_users,
+            'available_users': self.get_queue('sosq:available'),
+            'working_users': self.get_queue('sosq:working'),
+            'idle_users': self.get_queue('sosq:idle'),
         }
 
+
 class UserService:
-    # Base de datos de usuarios en memoria
+    # Esta clase no necesita cambios, ya que los usuarios son estáticos.
     _CREDENTIALS = {
         'admin':   {'id': 0, 'password': 'admin', 'admin': True, 'pin': '0000', 'name': 'admin'},
         'Juanfer': {'id': 1, 'password': '1', 'pin': '1234', 'name': 'Juanfer'},
@@ -127,7 +207,6 @@ class UserService:
     @classmethod
     def get_user_by_id(cls, user_id):
         """Busca un usuario por su ID y devuelve un objeto User."""
-        from app.models.User import User
         for uname, cred in cls._CREDENTIALS.items():
             if cred['id'] == int(user_id):
                 return User(
@@ -141,7 +220,6 @@ class UserService:
     @classmethod
     def get_user_by_name(cls, username):
         """Busca un usuario por su nombre y devuelve un objeto User."""
-        from app.models.User import User
         if username in cls._CREDENTIALS:
             cred = cls._CREDENTIALS[username]
             return User(

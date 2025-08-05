@@ -32,6 +32,7 @@
 
   <section id="user-container" class="queue-container">
     <div id="main-action-button-wrapper">
+      <!-- La lógica aquí ahora usa la variable `active_ids` que pasamos desde la ruta -->
       {% if current_user.is_authenticated and not current_user.is_admin and current_user.id not in active_ids %}
         <button id="btn-available">Ponerme Disponible</button>
       {% endif %}
@@ -109,8 +110,6 @@
     </section>
   </section>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js">
-  </script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const currentUserID = document.body.dataset.userId ? parseInt(document.body.dataset.userId, 10) : null;
@@ -126,8 +125,6 @@
       const socket = io();
 
       function renderJobStatus(state) {
-        console.log(`[CLIENTE] Renderizando estado del trabajo. Contador actual: ${state.job_count}`);
-        
         let content = '';
         const count = state.job_count;
 
@@ -145,9 +142,11 @@
       }
 
       function renderMainActionButton(state) {
+        // --- CORRECCIÓN ---
+        // Un usuario "activo" es solo el que está disponible o trabajando.
+        // Si está en descanso (idle), NO está activo, por lo que el botón debe aparecer.
         const isActive = state.available_users.some(u => u.id === currentUserID) || 
-                       state.working_users.some(u => u.id === currentUserID) || 
-                       state.idle_users.some(u => u.id === currentUserID);
+                       state.working_users.some(u => u.id === currentUserID);
 
         let buttonHTML = '';
         if (!isAdmin && !isActive) {
@@ -185,7 +184,7 @@
               userControlsHTML += '<button data-action="idle">Descansar</button>';
             } else if (status === 'working') {
               userControlsHTML += '<button data-action="finish">Terminar Trabajo</button>';
-            }
+            } 
           }
 
           if (isAdmin && status !== 'idle') {
@@ -249,6 +248,11 @@
             } else if (action === 'finish' || action === 'idle' || (isAdmin && action === 'set_idle')) {
                 emptyListItem(idleUsersList);
                 idleUsersList.appendChild(li);
+            } else if (action === 'set_available') {
+                // --- CORRECCIÓN ---
+                // Añadimos la lógica de actualización optimista para la nueva acción.
+                emptyListItem(availableUsersList);
+                availableUsersList.appendChild(li);
             }
         }
         
