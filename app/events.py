@@ -93,3 +93,10 @@ def handle_move_down(data):
             emit('update_state', get_full_state(), broadcast=True)
         except (KeyError, TypeError):
             print("Error: 'user_id' no fue proporcionado en el evento 'move_down'.")
+
+@socketio.on('remove_job')
+def handle_remove_job(data=None):
+    """(Admin) Disminuye el contador de trabajos en uno."""
+    if current_user.is_authenticated and getattr(current_user, 'is_admin', False):
+        job_service.decrement_job_count()
+        emit('update_state', get_full_state(), broadcast=True)

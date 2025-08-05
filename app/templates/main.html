@@ -7,7 +7,37 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/logo-isotipo-sos.webp') }}">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
-
+  <!-- Estilos para los botones de admin de trabajos -->
+  <style>
+    .admin-job-controls {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .job-control-btn {
+      border: none;
+      border-radius: 4px;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.9rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      color: white;
+    }
+    #btn-add-job {
+      background-color: var(--btn-green, #4CAF50);
+    }
+    #btn-add-job:hover {
+      background-color: #43a047;
+    }
+    #btn-remove-job {
+      background-color: var(--btn-red, #E74C3C);
+    }
+    #btn-remove-job:hover {
+      background-color: #c0392b;
+    }
+  </style>
 </head> 
 <body data-user-id="{{ current_user.id }}" data-is-admin="{{ current_user.is_admin }}">
   <header>
@@ -25,14 +55,20 @@
         <p>No hay trabajos disponibles.</p>
       {% endif %}
     </div>
-    {% if current_user.is_authenticated and current_user.is_admin %}
-      <button id="btn-add-job">Añadir Nuevo Trabajo</button>
-    {% endif %}
+    <!-- Contenedor para los botones de admin -->
+    <div class="admin-job-controls">
+      {% if current_user.is_authenticated and current_user.is_admin %}
+        <button id="btn-add-job" class="job-control-btn">Añadir Trabajo</button>
+        <!-- --- CORRECCIÓN --- El botón solo se renderiza si hay trabajos -->
+        {% if job_count > 0 %}
+          <button id="btn-remove-job" class="job-control-btn">Quitar Trabajo</button>
+        {% endif %}
+      {% endif %}
+    </div>
   </section>
 
   <section id="user-container" class="queue-container">
     <div id="main-action-button-wrapper">
-      <!-- La lógica aquí ahora usa la variable `active_ids` que pasamos desde la ruta -->
       {% if current_user.is_authenticated and not current_user.is_admin and current_user.id not in active_ids %}
         <button id="btn-available">Ponerme Disponible</button>
       {% endif %}
@@ -96,6 +132,11 @@
         {% for user in idle_users %}
           <li id="user-{{ user.id }}" class="idle">
             <span class="user-name {% if user.id == current_user.id %}current-user{% endif %}">{{ user.name }}</span>
+            <div class="user-controls">
+              {% if not current_user.is_admin and user.id == current_user.id %}
+                <button data-action="set_available">Ponerme Disponible</button>
+              {% endif %}
+            </div>
           </li>
         {% else %}
           <li class="empty-list-item">No hay nadie en descanso.</li>
@@ -121,6 +162,7 @@
       const workingUsersList = document.getElementById('working-users-list');
       const idleUsersList = document.getElementById('idle-users-list');
       const userContainer = document.getElementById('user-container');
+      const adminJobControls = document.querySelector('.admin-job-controls');
 
       const socket = io();
 
@@ -142,9 +184,6 @@
       }
 
       function renderMainActionButton(state) {
-        // --- CORRECCIÓN ---
-        // Un usuario "activo" es solo el que está disponible o trabajando.
-        // Si está en descanso (idle), NO está activo, por lo que el botón debe aparecer.
         const isActive = state.available_users.some(u => u.id === currentUserID) || 
                        state.working_users.some(u => u.id === currentUserID);
 
@@ -156,6 +195,19 @@
         if (mainActionButtonWrapper.innerHTML !== buttonHTML) {
             mainActionButtonWrapper.innerHTML = buttonHTML;
         }
+      }
+      
+      // --- NUEVA FUNCIÓN ---
+      // Renderiza los botones de control de trabajos para el admin
+      function renderAdminJobControls(state) {
+        if (!isAdmin) return;
+        
+        let buttonsHTML = '<button id="btn-add-job" class="job-control-btn">Añadir Trabajo</button>';
+        if (state.job_count > 0) {
+          buttonsHTML += ' <button id="btn-remove-job" class="job-control-btn">Quitar Trabajo</button>';
+        }
+        
+        adminJobControls.innerHTML = buttonsHTML;
       }
 
       function renderUserList(ulElement, users, status, state) {
@@ -184,7 +236,9 @@
               userControlsHTML += '<button data-action="idle">Descansar</button>';
             } else if (status === 'working') {
               userControlsHTML += '<button data-action="finish">Terminar Trabajo</button>';
-            } 
+            } else if (status === 'idle') {
+              userControlsHTML += '<button data-action="set_available">Ponerme Disponible</button>';
+            }
           }
 
           if (isAdmin && status !== 'idle') {
@@ -208,6 +262,7 @@
       function updateUI(state) {
         renderJobStatus(state);
         renderMainActionButton(state);
+        renderAdminJobControls(state); // <-- Llamada a la nueva función
         renderUserList(availableUsersList, state.available_users, 'available', state);
         renderUserList(workingUsersList, state.working_users, 'working', state);
         renderUserList(idleUsersList, state.idle_users, 'idle', state);
@@ -249,8 +304,6 @@
                 emptyListItem(idleUsersList);
                 idleUsersList.appendChild(li);
             } else if (action === 'set_available') {
-                // --- CORRECCIÓN ---
-                // Añadimos la lógica de actualización optimista para la nueva acción.
                 emptyListItem(availableUsersList);
                 availableUsersList.appendChild(li);
             }
@@ -266,6 +319,11 @@
           if (button.id === 'btn-add-job') {
               console.log("[CLIENTE] Enviando evento 'add_job'...");
               socket.emit('add_job');
+          }
+
+          if (button.id === 'btn-remove-job') {
+              console.log("[CLIENTE] Enviando evento 'remove_job'...");
+              socket.emit('remove_job');
           }
 
           if (button.id === 'btn-available') {

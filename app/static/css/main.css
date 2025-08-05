@@ -174,22 +174,25 @@ header h1 {
 }
 
 /* ==================================================================
-   5. Botones
+   5. Botones (ESTILOS MEJORADOS)
 ================================================================== */
 #btn-available {
   background-color: var(--btn-green);
   color: #ffffff;
   border: none;
-  border-radius: 4px;
-  padding: 0.7rem 1.4rem;
+  border-radius: 8px; /* Más redondeado */
+  padding: 0.8rem 1.5rem; /* Un poco más grande */
   font-size: 1rem;
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease-in-out;
   margin-bottom: 1.5rem;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 #btn-available:hover {
   background-color: #43a047;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
 }
 
 .user-controls {
@@ -199,22 +202,44 @@ header h1 {
   height: 100%;
 }
 
-/* Botones de acción del empleado */
-#btn-work, #btn-finish, #btn-idle {
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.9rem;
-  font-weight: bold;
+/* Estilo base para todos los botones de acción del usuario dentro de las listas */
+.user-controls button {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  white-space: nowrap;
 }
 
-#btn-work   { background-color: var(--accent-yellow); color: var(--text-main); border-color: #e6c843; }
-#btn-finish { background-color: var(--accent-yellow); color: var(--text-main); border-color: #e6c843; }
-#btn-idle   { background-color: #f8f9fa; color: var(--text-muted); }
+.user-controls button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+}
 
-/* Botones de admin */
+.user-controls button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* Estilos específicos por acción usando data-action */
+[data-action="work"],
+[data-action="finish"] {
+  background-color: var(--accent-yellow);
+}
+
+[data-action="idle"] {
+  background-color: var(--accent-yellow);
+}
+
+[data-action="set_available"] {
+  background-color: var(--accent-yellow);
+}
+
+/* Botones de admin (sin cambios) */
 .btn-admin {
   border: none;
   background: none;
@@ -228,4 +253,3 @@ header h1 {
   opacity: 1;
   transform: scale(1.1);
 }
-
