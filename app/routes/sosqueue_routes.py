@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify
 # Importamos los servicios Y el cliente de redis que creamos en service.py
-from ..python.service import QueueService, JobService, redis_client 
+from ..python.service import QueueService, JobService, redis_client
 from flask_login import login_required
 
 sos_bp = Blueprint('sosqueue', __name__)
@@ -14,18 +14,19 @@ job_service = JobService(redis_client)
 @sos_bp.route('/')
 @login_required
 def index():
-    # Ahora, cuando se llamen estos métodos, obtendrán los datos desde Redis.
     available_users = queue_service.get_queue('sosq:available')
     working_users = queue_service.get_queue('sosq:working')
     idle_users = queue_service.get_queue('sosq:idle')
     job_count = job_service.get_job_count()
-    
-    # El template main.html no necesita cambios, ya que la estructura de datos es la misma.
-    return render_template('main.html', 
-                           available_users=available_users,
-                           working_users=working_users,
-                           idle_users=idle_users,
-                           job_count=job_count)
+    active_ids = [u['id'] for u in available_users] + [u['id'] for u in working_users]
+    return render_template(
+        'main.html',
+        available_users=available_users,
+        working_users=working_users,
+        idle_users=idle_users,
+        job_count=job_count,
+        active_ids=active_ids
+    )
 
 # Las rutas de API que tenías antes ya no son necesarias si todo se maneja
 # por WebSockets, pero las dejamos aquí por si las usas para algo más.

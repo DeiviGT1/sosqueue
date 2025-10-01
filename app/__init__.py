@@ -8,7 +8,9 @@ from .python.service import UserService # Asegúrate que la ruta de importación
 from .models.User import User # Asegúrate que la ruta de importación es correcta
 
 # Crea las instancias de SocketIO y LoginManager aquí
-socketio = SocketIO()
+# Permite forzar el modo async por variable de entorno (producción sin logs de debug)
+ASYNC_MODE = os.environ.get("SIO_ASYNC_MODE", "threading")  # opciones: 'eventlet', 'gevent', 'threading'
+socketio = SocketIO(cors_allowed_origins="*", async_mode=ASYNC_MODE)
 login_manager = LoginManager()
 # Esta línea le dice a Flask-Login a qué vista redirigir si un usuario no autenticado intenta acceder a una página protegida.
 login_manager.login_view = 'auth.login'
@@ -26,9 +28,18 @@ def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'una-clave-secreta-muy-segura')
 
-    # Inicializa los componentes con la app
-    socketio.init_app(app)
+
+    # Inicializa los componentes con la app (con CORS explícito para Socket.IO)
+    socketio.init_app(app, cors_allowed_origins="*")
     login_manager.init_app(app)
+
+
+
+
+
+
+
+
 
     # Importa y registra los Blueprints (rutas)
     from .routes.auth_routes import auth_bp
@@ -39,5 +50,4 @@ def create_app():
     # Importa los eventos de WebSocket
     from . import events
 
-    print("Aplicación creada y configurada con LoginManager y WebSockets.")
     return app

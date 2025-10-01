@@ -1,25 +1,54 @@
 import json
 import os
+from urllib.parse import urlparse
 import redis
 from app.models.User import User
 
 # --- 1. Conexión a Redis ---
-# Se conecta usando la variable de entorno REDIS_URL que configuraste en Vercel.
-# Si no la encuentra, la aplicación mostrará un error en los logs.
+# Se conecta usando la variable de entorno REDIS_URL. Usamos timeouts cortos para evitar bloqueos en el arranque.
+
+def _connect_redis(url: str):
+    return redis.from_url(
+        url,
+        decode_responses=True,
+        socket_connect_timeout=5,  # evita cuelgues al conectar
+        socket_timeout=5,          # evita cuelgues en ping/respuestas
+        retry_on_timeout=True,
+        health_check_interval=30
+    )
+
+def _host_info(url: str) -> str:
+    try:
+        p = urlparse(url)
+        return f"{p.hostname}:{p.port}"
+    except Exception:
+        return url
+
 try:
-    # Usamos decode_responses=True para que Redis nos devuelva strings en lugar de bytes.
     redis_url = os.environ.get("REDIS_URL")
     if not redis_url:
         raise redis.exceptions.ConnectionError("La variable de entorno REDIS_URL no está definida.")
     
-    redis_client = redis.from_url(redis_url, decode_responses=True)
-    redis_client.ping()
-    print("Conexión a Redis establecida exitosamente.")
-except redis.exceptions.ConnectionError as e:
-    print(f"ADVERTENCIA: No se pudo conectar a Redis. La aplicación se ejecutará sin persistencia de datos. Error: {e}")
-    # --- CORRECCIÓN ---
-    # Si no hay conexión, creamos un objeto "falso" que imita el comportamiento de Redis
-    # para evitar que la aplicación se caiga durante el desarrollo local.
+    # Primer intento tal cual
+    try:
+        redis_client = _connect_redis(redis_url)
+        redis_client.ping()
+    except Exception as primary_err:
+        # Si falla y el esquema es redis://, reintenta con TLS rediss:// automáticamente
+        parsed = urlparse(redis_url)
+        if parsed.scheme == "redis":
+            tls_url = "rediss://" + redis_url.split("://", 1)[1]
+            try:
+                redis_client = _connect_redis(tls_url)
+                redis_client.ping()
+                # Actualizamos REDIS_URL solo en el entorno del proceso
+                os.environ["REDIS_URL"] = tls_url
+            except Exception as tls_err:
+                raise redis.exceptions.ConnectionError(f"Primer intento falló: {primary_err} | Intento TLS falló: {tls_err}")
+        else:
+            # No es redis://, propaga el error original
+            raise primary_err
+except Exception as e:
     from unittest.mock import Mock
     redis_client = Mock()
     # Configuramos el Mock para que devuelva valores por defecto seguros.
